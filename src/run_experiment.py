@@ -23,9 +23,8 @@ RANDOM_SEED = 42
 DATA_PATH = Path("/root/AD_project/data")
 OUTPUT_DIR = Path("/root/AD_project/outputs")
 
-# Exp 0(baseline) 재현 — 'auto'는 baseline의 기본값과 동일.
-EXP_NAME = "exp1"
-CONTAMINATION = 0.32
+EXP_NAME = "exp2"
+CONTAMINATION = 0.23
 
 # 참고: Exp 0 역산 결과, 모델이 예측한 positive 비율(14.8%)이 추정 실제 비율(32.2%)보다
 # 훨씬 낮았다 (docs/EXPERIMENT_LOG.md 참고). 이 값과 비교해 보며 다음 파라미터를 정한다.
