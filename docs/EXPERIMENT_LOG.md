@@ -46,11 +46,34 @@ CONTAMINATION="auto"). 이 커밋의 코드로 실행하면 `outputs/output_exp0
 
 **다음 시도 (합의됨 — Tier 1부터 진행)**:
 - [x] confusion matrix 역산으로 FP vs FN 비대칭 확인 → FN이 압도적으로 큼(과소 탐지)
-- [ ] **Exp 1 예정**: `contamination`을 실제 추정치(~0.32)에 맞게 조정 — 가장 작은 변화로 가설 1을
-      직접 검증. `src/` 모듈 구조로 포팅하며 진행.
+- [x] **Exp 1**: `contamination`을 실제 추정치(~0.32)에 맞게 조정 → 아래 항목 참고
 - [ ] (Tier 2, 보류) run 내 rolling mean/std, 직전 시점 대비 diff 등 시간창 feature 추가
 - [ ] (Tier 3, 보류) row-level score를 run 단위로 집계해 run 전체를 분류, 또는 시퀀스 모델(LSTM-AE 등)
 - [ ] SGDOneClassSVM을 실제로 학습/제출해 IsolationForest와 비교 (현재는 미실행 상태, 우선순위 낮음)
+
+---
+
+## Exp 1 — contamination 0.32 (`'auto'` → 0.32)
+
+**날짜**: 2026-06-30
+
+**재현 커밋**: `d2327fe` — `cd src && python run_experiment.py` (EXP_NAME="exp1", CONTAMINATION=0.32)
+
+**변경 사항**: Exp 0과 모든 게 동일, `IsolationForest`의 `contamination`만 `'auto'` → `0.32`로
+변경. 가설: train 기준 threshold를 풀어주면 test에서 더 많이 "이상"으로 잡아 recall이 오를 것이다
+(Exp 0 분석의 직접적인 후속).
+
+**로컬 진단 (제출 전)**: predicted positive rate가 14.81% → **44.36%**로 상승 — 목표였던 32.2%를
+12%p 초과. `contamination`이 train(100% 정상) 점수 분포 기준 threshold이기 때문에, 그 threshold를
+test에 적용했을 때 정확히 같은 비율이 나온다는 보장이 없다는 점(Q&A 기록 참고)이 그대로 드러남.
+test 점수 분포가 train보다 더 넓게 퍼져 있다는 뜻이며, 두 가지 가능성을 구분해야 함:
+1. test의 실제 이상 run들이 점수를 크게 끌어내림 (recall이 크게 오르는 좋은 신호)
+2. test의 정상 run도 train 정상과 미세하게 달라 threshold에 과민 반응 (precision이 크게 깎이는
+   나쁜 신호)
+
+**점수 (public)**: _(제출 후 기록 예정)_
+
+**분석**: _(점수 받으면 confusion matrix 역산 후 기록)_
 
 ---
 
