@@ -17,24 +17,36 @@
   설정의 IsolationForest를 다시 만들어 덮어쓴다. 결과적으로 `SGDOneClassSVM`은 import·설명만 되고
   실제 제출 결과에는 전혀 관여하지 않았다.
 
-**점수 (public)**: F1 0.5607
+**점수 (public)**: F1 0.5607, Accuracy 0.7936
 
-**분석 (가설)**:
-1. **Threshold 불일치**: `contamination='auto'`가 가정하는 이상치 비율이 실제 test set의 이상
-   비율과 다를 가능성 — precision/recall 중 한쪽이 크게 떨어졌을 수 있다 (어느 쪽인지는 confusion
-   matrix를 직접 봐야 확정 가능, 아직 미확인).
-2. **시간 정보 미사용**: row 단위 독립 가정으로 인해, 점진적으로 발생하는 이상(서서히 정상 범위를
-   벗어나는 패턴)을 단일 시점 값만으로는 포착하지 못했을 가능성.
-3. **Train/Test 분포 차이**: train은 run당 500 step, test는 960 step — test에 다른 길이의 transient
-   구간이 포함되어 있어 "정상"의 분포 자체가 약간 다를 수 있음.
-4. **스케일 미정규화**: IsolationForest는 스케일에 비교적 둔감하므로 이번 영향은 제한적일 것으로
-   추정(우선순위 낮음).
+**Confusion matrix 역산** (정답 라벨 없이도 accuracy + F1 + 예측 positive 개수(`output.csv`에서
+직접 카운트, PP=105,204/710,400)로 4칸을 모두 풀어낼 수 있음 — 유도: `FP+FN = N(1-accuracy)`,
+이를 F1 식에 대입하면 TP에 대한 1차방정식이 되어 풀림. accuracy/F1 역산값과 목표값이 소수점 4자리
+까지 일치해 신뢰 가능):
 
-**다음 시도 후보 (논의 후 진행 예정 — 아직 미결정)**:
-- [ ] confusion matrix로 어느 쪽 오류(FP vs FN)가 큰지 먼저 확인 → 이유 기반 우선순위 결정
-- [ ] `contamination` 값 조정 또는 `decision_function()` 점수 분포 직접 분석 후 threshold 튜닝
-- [ ] SGDOneClassSVM을 실제로 학습/제출해 IsolationForest와 비교 (현재는 미실행 상태)
-- [ ] 스케일링 적용 후 OneClassSVM 계열 재시도
+| | 예측 normal | 예측 anomaly |
+|---|---|---|
+| 실제 normal | TN ≈ 470,200 | FP ≈ 11,631 |
+| 실제 anomaly | FN ≈ 134,996 | TP ≈ 93,573 |
+
+→ Recall ≈ 0.4094, Precision ≈ 0.8894. 모델이 예측한 positive 비율은 14.8%인데 위 식으로 추정한
+실제 anomaly 비율은 약 32.2% — **모델이 실제보다 훨씬 적게 "이상"이라고 판단하고 있음(과소 탐지)**.
+
+**분석 (확정)**:
+1. **Threshold 불일치 (확인됨)**: `contamination='auto'`(약 10~15% 가정)가 실제 이상 비율(약 32%)
+   보다 훨씬 낮음 → precision은 높지만(89%) recall이 크게 희생(41%). 가장 직접적인 원인.
+2. **시간 정보 미사용 (보조 원인으로 추정)**: 문제 정의상 한 `simulationRun`은 통째로 0 또는 1인데,
+   모델은 row를 독립적으로 봄. 고장 초반의 점진적 드리프트 구간 row는 정상처럼 보일 수 있어 FN이
+   커지는 데 기여했을 가능성 — threshold 조정만으로는 한계가 있을 수 있음. (아직 직접 검증 안 됨)
+3. Train/Test 분포 차이, 스케일 미정규화: 위 1, 2번 대비 영향이 작을 것으로 추정 — 우선순위 낮음.
+
+**다음 시도 (합의됨 — Tier 1부터 진행)**:
+- [x] confusion matrix 역산으로 FP vs FN 비대칭 확인 → FN이 압도적으로 큼(과소 탐지)
+- [ ] **Exp 1 예정**: `contamination`을 실제 추정치(~0.32)에 맞게 조정 — 가장 작은 변화로 가설 1을
+      직접 검증. `src/` 모듈 구조로 포팅하며 진행.
+- [ ] (Tier 2, 보류) run 내 rolling mean/std, 직전 시점 대비 diff 등 시간창 feature 추가
+- [ ] (Tier 3, 보류) row-level score를 run 단위로 집계해 run 전체를 분류, 또는 시퀀스 모델(LSTM-AE 등)
+- [ ] SGDOneClassSVM을 실제로 학습/제출해 IsolationForest와 비교 (현재는 미실행 상태, 우선순위 낮음)
 
 ---
 
