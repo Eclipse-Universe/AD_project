@@ -9,6 +9,10 @@
 
 **날짜**: 2026-06-30
 
+**재현 커밋**: `5f60511` — `cd src && python run_experiment.py` (EXP_NAME="exp0",
+CONTAMINATION="auto"). 이 커밋의 코드로 실행하면 `outputs/output_exp0.csv`가
+`baseline_code/output.csv`와 행 단위로 완전히 동일함을 확인함 (710,400행 전수 비교).
+
 **변경 사항**: `baseline_code/baseline.ipynb` 그대로 실행.
 - Feature: `xmeas_1~41`, `xmv_1~11` (52개), 스케일링 없음, `simulationRun`/`sample` 제외
 - Model: `IsolationForest(random_state=42)` (sklearn 기본 파라미터, `contamination='auto'`)
