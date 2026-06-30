@@ -47,7 +47,13 @@ CONTAMINATION="auto"). 이 커밋의 코드로 실행하면 `outputs/output_exp0
 **다음 시도 (합의됨 — Tier 1부터 진행)**:
 - [x] confusion matrix 역산으로 FP vs FN 비대칭 확인 → FN이 압도적으로 큼(과소 탐지)
 - [x] **Exp 1**: `contamination`을 실제 추정치(~0.32)에 맞게 조정 → 아래 항목 참고
-- [ ] (Tier 2, 보류) run 내 rolling mean/std, 직전 시점 대비 diff 등 시간창 feature 추가
+- [x] **Exp 2**: contamination 0.23로 정밀화 → F1 0.5812(현재 최고), 봉우리 모양 확인, Tier 1 거의
+      소진된 것으로 판단 (2026-06-30 합의)
+- [ ] **Exp 3 예정 (Tier 2 시작)**: `simulationRun`별 직전 시점 대비 diff(변화량) feature 52개 추가
+      (원래 52개 값과 함께 사용, 총 104개). rolling mean/std는 window 크기라는 새 하이퍼파라미터가
+      생겨 변수를 한 번에 하나씩 바꾸는 원칙에 어긋나므로 보류, diff 효과 확인 후 필요하면 추가.
+      설계 제약: ① `groupby('simulationRun')`으로 그룹화 후 diff(run 경계를 넘는 diff 방지), ②
+      각 run 첫 row의 NaN은 0으로 채움(드롭하면 제출 행 수 710,400 깨짐 — 드롭은 선택지 아님).
 - [ ] (Tier 3, 보류) row-level score를 run 단위로 집계해 run 전체를 분류, 또는 시퀀스 모델(LSTM-AE 등)
 - [ ] SGDOneClassSVM을 실제로 학습/제출해 IsolationForest와 비교 (현재는 미실행 상태, 우선순위 낮음)
 

@@ -71,6 +71,18 @@ matrix를 역산해 recall/precision이 어떻게 움직였는지 보고 다음 
 "exp0"`일 때 `CONTAMINATION = "auto"`가 통과했던 건 `'auto'`가 정확히 그 특수 문자열 값이었기
 때문. 수정: `CONTAMINATION = 0.32` (따옴표 제거).
 
+**Q. Exp 0/1/2로 threshold(contamination)를 다 찍어봤는데, 다음은 무엇이고 왜 그걸 고르나?**
+세 점(predicted rate 14.81%/44.36%/36.13%, F1 0.5607/0.5699/0.5812)이 역U자 곡선을 그렸고, 곡선의
+정점(Exp 2)에서도 recall 0.6155/precision 0.5506로 둘 다 평범했다 — threshold를 거의 정확히
+맞춰도 안 풀리는 한계라는 뜻이라, Tier 1(threshold 튜닝)을 닫고 Tier 2(시간 정보 feature)로
+넘어가기로 했다. 첫 feature로 rolling mean/std가 아니라 **diff(직전 시점 대비 변화량)**를 먼저
+시도하기로 한 이유: rolling은 window 크기라는 새 하이퍼파라미터가 생겨 "한 번에 하나씩 바꿔
+원인을 분리한다"는 지금까지의 실험 원칙에 어긋나고, diff는 하이퍼파라미터 없이 "고장 초반 점진적
+드리프트" 가설을 가장 직접적으로 테스트할 수 있다. 설계 시 두 가지를 반드시 지키기로 함: ①
+`simulationRun`별로 그룹화한 뒤 diff를 계산해야 run 경계를 넘는 의미 없는 값이 안 생긴다, ② 각
+run의 첫 row는 diff가 NaN이 되는데, 그 row를 버리면 제출 파일이 710,400행이 안 돼 채점이 깨지므로
+반드시 0으로 채워야 한다(드롭은 선택지가 아님).
+
 ---
 
 (다음 질문은 여기에 이어서 추가)
