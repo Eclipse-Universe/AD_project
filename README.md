@@ -17,6 +17,7 @@ Train은 정상 데이터만 포함되어 있어 **Novelty Detection** 문제로
 
 - [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) — 대회/데이터 개요, baseline 코드 흐름, 주의사항
 - [docs/CONCEPTS.md](docs/CONCEPTS.md) — 프로젝트에 필요한 사전 개념과 baseline 코드 매핑
+- [docs/SRC_DESIGN.md](docs/SRC_DESIGN.md) — `src/` 각 파일의 책임과 설계 이유 (구현은 직접 작성)
 - [docs/EXPERIMENT_LOG.md](docs/EXPERIMENT_LOG.md) — 실험/제출 기록
 
 ## 구조
