@@ -64,6 +64,13 @@ feature 선택, fit, 라벨 변환)은 이미 셀 단위로 충분히 리뷰를 
 없다 — train과 test의 점수 분포가 다를 수 있기 때문이다. 그래서 Exp 1 결과를 받으면 다시 confusion
 matrix를 역산해 recall/precision이 어떻게 움직였는지 보고 다음 값을 조정하는 반복 과정으로 본다.
 
+**(버그) `CONTAMINATION = "0.32"`로 두니 `InvalidParameterError`가 났다 — 왜?**
+따옴표 때문에 문자열이 됐다. sklearn `IsolationForest`(1.3+)는 `contamination`에 대해
+`_validate_params`로 엄격한 타입 검증을 한다 — 허용값은 리터럴 문자열 `'auto'` 또는 `(0.0, 0.5]`
+범위의 실제 float뿐이고, 숫자처럼 보이는 문자열을 자동으로 float로 캐스팅해주지 않는다. `EXP_NAME =
+"exp0"`일 때 `CONTAMINATION = "auto"`가 통과했던 건 `'auto'`가 정확히 그 특수 문자열 값이었기
+때문. 수정: `CONTAMINATION = 0.32` (따옴표 제거).
+
 ---
 
 (다음 질문은 여기에 이어서 추가)
