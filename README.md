@@ -20,6 +20,7 @@ Train은 정상 데이터만 포함되어 있어 **Novelty Detection** 문제로
 - [docs/SRC_DESIGN.md](docs/SRC_DESIGN.md) — `src/` 각 파일의 책임과 설계 이유 (구현은 직접 작성)
 - [docs/EXPERIMENT_LOG.md](docs/EXPERIMENT_LOG.md) — 실험/제출 기록
 - [docs/QA_LOG.md](docs/QA_LOG.md) — 진행하며 나온 "왜?" 질문과 답 (포트폴리오/PPT용 사고 과정 기록)
+- [docs/MENTORING_QUESTIONS.md](docs/MENTORING_QUESTIONS.md) — 확신 없이 경험적으로 판단한 지점들, 멘토링용 질문 리스트
 
 ## 구조
 
