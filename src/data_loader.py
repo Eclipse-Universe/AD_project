@@ -5,10 +5,8 @@ import pandas as pd
 
 
 def load_train(path: Path) -> pd.DataFrame:
-    # TODO: train.csv를 읽어 DataFrame으로 반환 (baseline.ipynb cell 10)
-    raise NotImplementedError
+    return pd.read_csv(Path(path) / "train.csv")
 
 
 def load_test(path: Path) -> pd.DataFrame:
-    # TODO: test.csv를 읽어 DataFrame으로 반환 (baseline.ipynb cell 55)
-    raise NotImplementedError
+    return pd.read_csv(Path(path) / "test.csv")
