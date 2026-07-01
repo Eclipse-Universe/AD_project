@@ -23,13 +23,13 @@ RANDOM_SEED = 42
 DATA_PATH = Path("/root/AD_project/data")
 OUTPUT_DIR = Path("/root/AD_project/outputs")
 
-EXP_NAME = "exp8"
-CONTAMINATION = 0.23   # Exp 4 최적값 그대로 (모델 학습용)
-MAX_SAMPLES = 512      # Exp 4 최적값 그대로 (모델 학습용)
+EXP_NAME = "exp12"
+CONTAMINATION = 0.23
+MAX_SAMPLES = 512
+N_ESTIMATORS = 300     # Exp 11(200)에서 개선 확인 → 추가 안정화 시도
 
-# run 단위 이상 판정 비율. row 단위 추정치(32.2%)와 동일하게 시작.
-# test는 run당 timestep 수가 동일(960개)하므로 run X% = row X%가 성립한다.
-RUN_CONTAMINATION = 0.322
+RUN_CONTAMINATION = 0.32   # Exp 11에서 Precision(0.9137) >> Recall(0.8531) → 조금 더 잡아 균형
+AGG = "mean"
 
 ESTIMATED_TRUE_POSITIVE_RATE = 0.322
 
@@ -42,14 +42,19 @@ def main():
     train_X = select_features(train_data)
     model = train_isolation_forest(
         train_X, random_state=RANDOM_SEED,
-        contamination=CONTAMINATION, max_samples=MAX_SAMPLES
+        contamination=CONTAMINATION, max_samples=MAX_SAMPLES,
+        n_estimators=N_ESTIMATORS,
     )
 
     test_data = load_test(DATA_PATH)
     test_X = select_features(test_data)
     test_run_ids = test_data["simulationRun"]
 
-    pred = predict_labels_by_run(model, test_X, test_run_ids, RUN_CONTAMINATION)
+    pred = predict_labels_by_run(
+        model, test_X, test_run_ids,
+        run_contamination=RUN_CONTAMINATION,
+        agg=AGG,
+    )
 
     output_path = OUTPUT_DIR / f"output_{EXP_NAME}.csv"
     save_submission(pred, test_X.index, output_path)

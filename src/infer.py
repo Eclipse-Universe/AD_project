@@ -14,18 +14,29 @@ def predict_labels(model, X: pd.DataFrame) -> np.ndarray:
     return pred_y
 
 
-def predict_labels_by_run(model, X: pd.DataFrame, run_ids: pd.Series, run_contamination: float) -> np.ndarray:
+def predict_labels_by_run(
+    model,
+    X: pd.DataFrame,
+    run_ids: pd.Series,
+    run_contamination: float,
+    agg: str = "mean",
+    score_percentile: int = 10,
+) -> np.ndarray:
     # decision_function: 낮을수록 이상 (IF 기준)
-    scores = model.decision_function(X)
+    scores = pd.Series(model.decision_function(X), index=X.index)
+    grouped = scores.groupby(run_ids.values)
 
-    # run별 평균 점수 계산
-    run_mean_scores = pd.Series(scores, index=X.index).groupby(run_ids.values).mean()
+    if agg == "mean":
+        run_scores = grouped.mean()
+    elif agg == "percentile":
+        # 하위 score_percentile% — run 안에서 가장 이상다운 순간들을 대표값으로 사용
+        # min보다 잡음에 강하고, mean보다 고장 발전 후반부를 더 잘 반영
+        run_scores = grouped.quantile(score_percentile / 100)
+    elif agg == "min":
+        run_scores = grouped.min()
 
-    # 하위 run_contamination 비율의 run을 이상으로 판정
-    threshold = run_mean_scores.quantile(run_contamination)
-    anomalous_runs = run_mean_scores.index[run_mean_scores <= threshold]
-
-    # row 단위로 확장 (같은 run의 모든 row에 동일 라벨 적용)
+    threshold = run_scores.quantile(run_contamination)
+    anomalous_runs = run_scores.index[run_scores <= threshold]
     return run_ids.isin(anomalous_runs).astype(int).values
 
 
