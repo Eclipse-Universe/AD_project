@@ -11,3 +11,6 @@ output.csv
 # Experiment outputs are regenerable from code (git history) + data;
 # the meaningful record lives in docs/EXPERIMENT_LOG.md, not the raw csv.
 outputs/
+
+# EDA 시각화 HTML — 브라우저에서 열어 확인하는 용도, 대용량이라 저장소에 포함하지 않음.
+eda/*.html
