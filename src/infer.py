@@ -14,5 +14,20 @@ def predict_labels(model, X: pd.DataFrame) -> np.ndarray:
     return pred_y
 
 
+def predict_labels_by_run(model, X: pd.DataFrame, run_ids: pd.Series, run_contamination: float) -> np.ndarray:
+    # decision_function: 낮을수록 이상 (IF 기준)
+    scores = model.decision_function(X)
+
+    # run별 평균 점수 계산
+    run_mean_scores = pd.Series(scores, index=X.index).groupby(run_ids.values).mean()
+
+    # 하위 run_contamination 비율의 run을 이상으로 판정
+    threshold = run_mean_scores.quantile(run_contamination)
+    anomalous_runs = run_mean_scores.index[run_mean_scores <= threshold]
+
+    # row 단위로 확장 (같은 run의 모든 row에 동일 라벨 적용)
+    return run_ids.isin(anomalous_runs).astype(int).values
+
+
 def save_submission(pred: np.ndarray, index: pd.Index, path: str) -> None:
     pd.DataFrame(pred, columns=["faultNumber"], index=index).to_csv(path, index=True)
