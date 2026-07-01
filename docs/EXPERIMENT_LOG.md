@@ -218,7 +218,7 @@ Recall ≈ 0.5852, Precision ≈ 0.5390 (추정 실제 anomaly 비율 ≈ 0.3232
 
 **날짜**: 2026-07-01
 
-**재현 커밋**: (아래 커밋에 포함)
+**재현 커밋**: `129fdbf` — `cd src && python run_experiment.py` (EXP_NAME="exp4", CONTAMINATION=0.23, MAX_SAMPLES=512)
 
 **변경 사항**: Exp 2와 비교해 두 가지만 변경.
 - diff feature 제거, 원본 52개 feature로 복원 (Exp 3 실패 후 feature는 원점으로)
