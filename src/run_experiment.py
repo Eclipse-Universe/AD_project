@@ -23,8 +23,9 @@ RANDOM_SEED = 42
 DATA_PATH = Path("/root/AD_project/data")
 OUTPUT_DIR = Path("/root/AD_project/outputs")
 
-EXP_NAME = "exp2"
+EXP_NAME = "exp4"
 CONTAMINATION = 0.23
+MAX_SAMPLES = 512
 
 # 참고: Exp 0 역산 결과, 모델이 예측한 positive 비율(14.8%)이 추정 실제 비율(32.2%)보다
 # 훨씬 낮았다 (docs/EXPERIMENT_LOG.md 참고). 이 값과 비교해 보며 다음 파라미터를 정한다.
@@ -37,7 +38,7 @@ def main():
 
     train_data = load_train(DATA_PATH)
     train_X = select_features(train_data)
-    model = train_isolation_forest(train_X, random_state=RANDOM_SEED, contamination=CONTAMINATION)
+    model = train_isolation_forest(train_X, random_state=RANDOM_SEED, contamination=CONTAMINATION, max_samples=MAX_SAMPLES)
 
     test_data = load_test(DATA_PATH)
     test_X = select_features(test_data)

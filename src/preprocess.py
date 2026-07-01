@@ -20,3 +20,9 @@ NUMERIC_COLS = [
 
 def select_features(df: pd.DataFrame) -> pd.DataFrame:
     return df[NUMERIC_COLS]
+
+
+def add_diff_features(df: pd.DataFrame) -> pd.DataFrame:
+    diff_df = df.groupby("simulationRun")[NUMERIC_COLS].diff().fillna(0)
+    return diff_df.add_suffix("_diff")
+
