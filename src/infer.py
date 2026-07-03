@@ -40,5 +40,26 @@ def predict_labels_by_run(
     return run_ids.isin(anomalous_runs).astype(int).values
 
 
+def predict_labels_by_run_ae(
+    model,
+    X: pd.DataFrame,
+    run_ids: pd.Series,
+    run_contamination: float,
+) -> np.ndarray:
+    """Autoencoder 재구성 오차 기반 run-level 이상 탐지.
+
+    IF와 방향이 반대다 — 재구성 오차가 '높을수록' 이상.
+    상위 run_contamination 비율을 anomalous로 판정한다.
+    """
+    import torch
+    X_t = torch.tensor(X.values.astype("float32"))
+    row_errors = model.reconstruction_error(X_t).numpy()
+    error_series = pd.Series(row_errors, index=X.index)
+    run_errors = error_series.groupby(run_ids.values).mean()
+    threshold = run_errors.quantile(1 - run_contamination)
+    anomalous_runs = run_errors.index[run_errors >= threshold]
+    return run_ids.isin(anomalous_runs).astype(int).values
+
+
 def save_submission(pred: np.ndarray, index: pd.Index, path: str) -> None:
     pd.DataFrame(pred, columns=["faultNumber"], index=index).to_csv(path, index=True)

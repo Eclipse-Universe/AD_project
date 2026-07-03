@@ -17,20 +17,21 @@ import pandas as pd
 from data_loader import load_test, load_train
 from infer import predict_labels_by_run, save_submission
 from model import train_isolation_forest
-from preprocess import select_features
+from preprocess import fit_scaler, scale_features, select_features
 
 RANDOM_SEED = 42
 DATA_PATH = Path("/root/AD_project/data")
 OUTPUT_DIR = Path("/root/AD_project/outputs")
 
-EXP_NAME = "exp12"
+EXP_NAME = "exp14b"
+# IF + RobustScaler — exp14(StandardScaler)와 비교해 scaler 종류의 영향 분리
 CONTAMINATION = 0.23
 MAX_SAMPLES = 512
-N_ESTIMATORS = 300     # Exp 11(200)에서 개선 확인 → 추가 안정화 시도
+N_ESTIMATORS = 300
+SCALER_TYPE = "robust"   # "standard" or "robust"
 
-RUN_CONTAMINATION = 0.32   # Exp 11에서 Precision(0.9137) >> Recall(0.8531) → 조금 더 잡아 균형
+RUN_CONTAMINATION = 0.32
 AGG = "mean"
-
 ESTIMATED_TRUE_POSITIVE_RATE = 0.322
 
 
@@ -39,7 +40,11 @@ def main():
     random.seed(RANDOM_SEED)
 
     train_data = load_train(DATA_PATH)
-    train_X = select_features(train_data)
+    train_X_raw = select_features(train_data)
+
+    scaler = fit_scaler(train_X_raw, scaler_type=SCALER_TYPE)
+    train_X = scale_features(train_X_raw, scaler)
+
     model = train_isolation_forest(
         train_X, random_state=RANDOM_SEED,
         contamination=CONTAMINATION, max_samples=MAX_SAMPLES,
@@ -47,7 +52,8 @@ def main():
     )
 
     test_data = load_test(DATA_PATH)
-    test_X = select_features(test_data)
+    test_X_raw = select_features(test_data)
+    test_X = scale_features(test_X_raw, scaler)
     test_run_ids = test_data["simulationRun"]
 
     pred = predict_labels_by_run(
