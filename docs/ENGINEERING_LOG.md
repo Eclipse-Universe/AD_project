@@ -182,6 +182,36 @@ F1 + Accuracy + PP(예측 양성 수, output.csv row count)로 혼동행렬 4칸
 
 ---
 
+## 5-1. KMeans 실험 발견 (2026-07-03)
+
+### n_clusters 선택 근거
+- 너무 작으면 군집이 너무 넓어 이상 run이 정상 군집 내부에 묻힘
+- 너무 크면 군집당 샘플 수가 너무 적어 노이즈에 과적합
+- 500개 train run 기준 k=50 → 군집당 평균 10개: 군집 안정성과 세밀함의 균형점
+- 탐색 범위: k ∈ {10, 20, 30, 50}, 상승 추세 확인 후 50에서 마침
+
+### k값 증가에 따른 패턴
+k가 클수록 train 군집 std가 줄어들고 separation index가 높아진다 (70→83).
+그러나 어떤 k에서도 이진 예측(237개 이상 run)은 완전히 동일.
+→ 이상 run이 정상 군집에서 워낙 멀리 떨어져 있어, 군집 구조의 세밀함과 무관하게 항상 상위 32%에 속함.
+
+### KMeans vs LOF 관계
+- LOF: 로컬 밀도 비교 → 정상 군집에서 국소적으로 이탈한 이상 감지
+- KMeans: 글로벌 군집 중심 거리 → 정상 운전 패턴 어디에도 속하지 않는 이상 감지
+- 두 모델이 694/740 run에서 동의, 46개 run(각 23개)에서 의견 다름
+- KMeans separation index(82.98) > LOF(68.57) → 분리가 더 선명하지만 동일한 run 집합을 판정
+
+### 출력 파일 명명 규칙 (2026-07-03 확정)
+`output_exp{순번}({모델명}).csv` 형식으로 통일.
+기존 파일 모두 소급 적용. 그리드 탐색용 임시 파일은 제출 후 삭제.
+- IF 계열: output_exp0~4(IF), exp8~12(IF-run), exp14/14b(IF)
+- OC-SVM: exp5~7(OC-SVM)  
+- AE: exp13(AE)
+- LOF: exp15(LOF)
+- KMeans: exp16(KMeans)
+
+---
+
 ## 6. 현재 진행 상황
 
 | 단계 | 상태 | 결과 |
@@ -190,8 +220,8 @@ F1 + Accuracy + PP(예측 양성 수, output.csv row count)로 혼동행렬 4칸
 | IF row-level | 완료 | F1 0.5869 (한계 확인) |
 | Run-level 집계 도입 | 완료 | F1 0.5869 → 0.8870 (브레이크스루) |
 | Autoencoder | 완료 | F1 0.9205 (현재 최고) |
-| LOF 실험 | 진행 중 | Standard/52피처 baseline 생성, Standard vs Robust + 52 vs 48 비교 예정 |
-| KMeans 실험 | 대기 | LOF 후 |
+| LOF 실험 | 완료 | LOF-A(Standard+52피처) F1 0.9237, 전체 최고 |
+| KMeans 실험 | 진행 중 | k=50, Standard, 제출 대기 중 |
 | KNN run-level | 대기 | 행 수준은 너무 느려 run-level 평균 방식으로 재설계 |
 | OC-SVM | 포기 | 선형 커널 한계 + 학습 시간 |
 | 앙상블 | 보류 | ML 모델 전부 완료 후 |
