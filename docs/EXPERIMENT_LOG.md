@@ -1113,7 +1113,29 @@ KNN 고유 플래그 40개가 대부분 FP였을 가능성이 높아, 앙상블�
 - KMeans-Mahal (Exp 17): F1 0.9277 (전체 최고)
 - KNN (Exp 18): F1 0.8559 (LOF/Mahal보다 낮아 앙상블 기여도 낮음)
 
-**다음 우선순위**: Exp 19 (Mahal RC=0.31) 제출 결과 → AE 개선 → LOF+Mahal 2모델 앙상블 검토
+---
+
+## KMeans-Mahal k=100 로컬 실험 (미제출)
+
+**날짜**: 2026-07-03
+
+k=50 → k=100으로 군집 수를 늘렸을 때의 효과 확인. Global Σ⁻¹은 동일하게 유지.
+
+| k | separation_idx | predicted rate | LOF 일치 | Euclid 일치 |
+|---|---|---|---|---|
+| 50 | 460.551 | 0.3203 | 694/740 | 724/740 |
+| 100 | **469.289** | 0.3203 | **694/740** | **724/740** |
+
+**결론: 미제출 결정.**
+
+Separation index가 460 → 469로 소폭 올랐으나 **이진 예측(237개 run)이 k=50과 완전히 동일**하다.
+이상 run들이 정상 군집에서 너무 멀리 떨어져 있어 k값에 무관하게 동일한 run 집합을 잡는다.
+(Euclidean KMeans에서도 동일 패턴 확인된 바 있음 — Exp 16 참고)
+
+Global Σ⁻¹ + k 증가 방향은 천장에 닿았다. 다음 단계는 **GMM (per-component Σ_k)** — sklearn의
+`GaussianMixture(covariance_type='full')`으로 각 성분마다 자체 공분산 행렬을 학습하는 방식.
+
+**다음 우선순위**: GMM 실험 → AE 개선 (bottleneck 16)
 
 ---
 
