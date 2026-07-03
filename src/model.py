@@ -38,10 +38,13 @@ def train_lof(X: pd.DataFrame, **params) -> LocalOutlierFactor:
 
 
 class KMeansAnomalyDetector:
-    """KMeans 클러스터 중심까지 거리를 이상 점수로 사용.
+    """KMeans 클러스터 중심까지 유클리드 거리를 이상 점수로 사용.
 
     정상 데이터로만 학습 → 이상 데이터는 클러스터 중심에서 멀리 떨어진다는 가정.
     규칙: decision_function() → 낮을수록 이상 (거리를 음수화해 IF/LOF와 동일 방향으로 통일).
+
+    한계: 유클리드 거리는 피처를 독립적으로 취급함 → 피처 간 상관이 깨지는 이상을 포착 못함.
+    개선 버전: KMeansMahalanobisDetector 참고.
     """
 
     def __init__(self, n_clusters: int = 10, random_state: int = 42):
@@ -55,6 +58,52 @@ class KMeansAnomalyDetector:
         dists = self.model.transform(X.values if hasattr(X, "values") else X)
         min_dists = dists.min(axis=1)
         return -min_dists  # 음수화: 낮을수록(= 거리가 멀수록) 이상
+
+
+class KMeansMahalanobisDetector:
+    """KMeans + 마할라노비스 거리 기반 이상 탐지.
+
+    유클리드 거리(KMeansAnomalyDetector)의 두 가지 한계를 동시에 해결한다:
+
+    1. 피처 스케일 문제: 분산이 큰 피처(xmv_5 std_ratio 18.46)가 거리를 지배하는 것을
+       공분산 역행렬 Σ⁻¹이 정규화해 모든 피처가 균등하게 기여하도록 만든다.
+
+    2. 상관 구조 미반영: 유클리드 거리는 xmv_7↔xmeas_12(r=1.0)처럼 강하게 상관된 피처 쌍의
+       관계가 깨지는 이상을 포착하지 못한다. 마할라노비스 거리는 Σ⁻¹에 공분산 구조가 인코딩되어
+       있어 "두 피처의 관계가 틀어진" 이상 run에 더 큰 거리 값을 부여한다.
+
+    거리 공식: d(x, μ_k) = √[(x−μ_k)ᵀ Σ⁻¹ (x−μ_k)]
+    Σ: 전체 훈련 데이터의 글로벌 공분산 행렬 (250,000행으로 안정적으로 추정 가능)
+    이론적 근거: EDA에서 |왜도|<0.2 확인 → 다변량 정규분포 가정 성립 → 마할라노비스 거리가 최적
+
+    규칙: decision_function() → 낮을수록 이상 (거리 음수화, IF/LOF와 동일 방향).
+    """
+
+    def __init__(self, n_clusters: int = 50, random_state: int = 42):
+        self.model = KMeans(n_clusters=n_clusters, random_state=random_state, n_init="auto")
+        self.cov_inv: np.ndarray | None = None
+
+    def fit(self, X: pd.DataFrame) -> "KMeansMahalanobisDetector":
+        X_arr = X.values if hasattr(X, "values") else np.asarray(X)
+        self.model.fit(X_arr)
+        # 글로벌 공분산 역행렬 추정 (훈련 데이터 전체 사용 → 안정적)
+        cov = np.cov(X_arr, rowvar=False)          # (d, d)
+        self.cov_inv = np.linalg.pinv(cov)         # 유사역행렬: 수치 불안정 방지
+        return self
+
+    def decision_function(self, X: pd.DataFrame) -> np.ndarray:
+        X_arr = X.values if hasattr(X, "values") else np.asarray(X, dtype=float)
+        centers = self.model.cluster_centers_       # (k, d)
+        # 각 군집 중심까지 마할라노비스 거리 계산 후 최솟값 선택
+        # diff @ cov_inv: (n, d) @ (d, d) → (n, d)
+        # element-wise * diff 후 합산 → (n,): 각 점의 마할라노비스 거리 제곱
+        all_dists = np.empty((X_arr.shape[0], len(centers)))
+        for j, c in enumerate(centers):
+            diff = X_arr - c                        # (n, d) 브로드캐스트
+            mahal_sq = (diff @ self.cov_inv * diff).sum(axis=1)
+            all_dists[:, j] = np.sqrt(np.maximum(mahal_sq, 0))
+        min_dists = all_dists.min(axis=1)
+        return -min_dists                           # 음수화: 낮을수록 이상
 
 
 class KNNAnomalyDetector:

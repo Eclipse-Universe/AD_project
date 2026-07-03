@@ -14,3 +14,8 @@ outputs/
 
 # EDA 시각화 HTML — 브라우저에서 열어 확인하는 용도, 대용량이라 저장소에 포함하지 않음.
 eda/*.html
+
+# 개인 기록 — 멘토링 Q&A, 내부 의사결정 대화.
+# 로컬에는 보존하지만 GitHub에는 공개하지 않음.
+docs/MENTORING_QUESTIONS.md
+docs/QA_LOG.md

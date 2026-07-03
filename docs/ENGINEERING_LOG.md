@@ -201,6 +201,30 @@ k가 클수록 train 군집 std가 줄어들고 separation index가 높아진다
 - 두 모델이 694/740 run에서 동의, 46개 run(각 23개)에서 의견 다름
 - KMeans separation index(82.98) > LOF(68.57) → 분리가 더 선명하지만 동일한 run 집합을 판정
 
+### KMeans Euclidean vs Mahalanobis — 핵심 차이
+
+KMeans-Euclid (Exp 16): F1 0.9083, Recall 0.8969, FN ~25 runs
+KMeans-Mahal (Exp 17): 실험 진행 중
+
+Euclidean이 실패한 구체적 패턴 (형태 B 이상):
+- 정상: xmv_7 ≈ xmeas_12 (r=1.0 공선관계 유지)
+- 이상: xmv_7=+1.5σ, xmeas_12=−0.5σ (관계 파괴, 개별값은 moderate)
+- Euclidean: 두 피처가 각각 군집 중심에서 적당히 가까워 낮은 이상 점수 → FN
+- Mahalanobis: Σ⁻¹이 "xmv_7과 xmeas_12가 반대 방향 = 상관 파괴"를 포착 → 높은 이상 점수
+
+### GitHub 공개/비공개 재구성 (2026-07-03)
+
+**공개 (GitHub)**:
+- src/ 전체 (소스 코드)
+- docs/EXPERIMENT_LOG.md, ENGINEERING_LOG.md, EDA_SUMMARY.md, SRC_DESIGN.md, CONCEPTS.md
+- eda/ 스크립트 및 CSV
+- README.md, PROJECT_CONTEXT.md, baseline_code/
+
+**비공개 (.gitignore에 추가, 로컬 보존)**:
+- docs/MENTORING_QUESTIONS.md — 개인 멘토링 Q&A
+- docs/QA_LOG.md — 내부 의사결정 대화 기록
+이유: 경쟁 전략 정보, 개인 학습 과정이 포함되어 있어 공개 포트폴리오에 적합하지 않음.
+
 ### 출력 파일 명명 규칙 (2026-07-03 확정)
 `output_exp{순번}({모델명}).csv` 형식으로 통일.
 기존 파일 모두 소급 적용. 그리드 탐색용 임시 파일은 제출 후 삭제.
