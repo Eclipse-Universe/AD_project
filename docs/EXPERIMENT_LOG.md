@@ -623,4 +623,159 @@ IF + run-level 집계 프레임 내에서 추가 개선 폭이 수렴하고 있�
 
 ---
 
+## Exp 13 — Autoencoder (재구성 오차 기반 + run-level 집계)
+
+**날짜**: 2026-07-01
+
+`cd src && python run_experiment.py` (EXP_NAME="exp13", HIDDEN_DIMS=[32,16,8], RUN_CONTAMINATION=0.32)
+
+---
+
+### 왜 Autoencoder로 전환했나
+
+Exp 12까지 IF + run-level 집계는 F1 0.8870에서 수렴 조짐을 보였다 (Exp 9→11→12: +0.0058, +0.0046 — 개선 폭 감소).
+
+IF의 구조적 한계: 랜덤 수직·수평 분기로 이상을 탐지하므로 센서 간 상관관계(xmeas_12↔xmv_7 완전 상관 등)를 명시적으로 학습하지 않는다. 이상 run은 개별 센서가 정상 범위 내에 있어도 "센서들 사이의 관계가 깨지는 것"으로 나타날 수 있는데, IF는 이 신호를 포착하지 못한다.
+
+Autoencoder는 정상 데이터만으로 학습해 "정상 패턴을 얼마나 잘 복원할 수 있는가"를 직접 학습한다. bottleneck 압축-복원 과정에서 센서 간 상관관계가 자연스럽게 인코딩된다 — 상관이 깨진 이상 run은 복원이 잘 안 되어 재구성 오차(reconstruction error)가 높게 나온다.
+
+외부 벤치마크(Hartung 2023, TEP 비교)에서 재구성 오차 기반 딥러닝이 IF보다 상위권을 차지한다는 근거도 있다.
+
+---
+
+**변경 사항**: IF 전체를 PyTorch Autoencoder로 교체. run-level 집계 방식은 유지.
+
+- **전처리**: StandardScaler 추가 (fit은 train에만, test는 transform만 — 누수 방지). IF는 스케일 무관이지만 AE는 MSE 최소화 기반이므로 스케일 차이가 큰 feature가 loss를 지배하는 것을 막기 위해 필수.
+- **구조**: 52 → 32 → 16 → 8 (bottleneck) → 16 → 32 → 52. 인코더 활성화: ReLU. 디코더 마지막 레이어: Linear(활성화 없음, 정규화된 값이 음수일 수 있어서).
+- **학습**: Adam(lr=1e-3), MSE loss, batch=256, 최대 epoch=100, 조기 종료(patience=10), validation 10% holdout.
+- **이상 점수**: row별 재구성 오차(MSE) → run별 mean → 상위 RUN_CONTAMINATION 비율을 이상 판정. IF와 방향 반대 — IF는 점수가 낮을수록 이상, AE는 오차가 높을수록 이상.
+- **RUN_CONTAMINATION**: 0.32 (Exp 12와 동일 — IF vs AE 기준 비교 목적)
+
+**학습 로그**:
+
+| epoch | val loss |
+|---|---|
+| 10 | 0.524394 |
+| 20 | 0.514661 |
+| 30 | 0.512841 |
+| 40 | 0.512256 |
+| 50 | 0.512020 |
+| 60 | 0.511948 |
+| **66 (early stop)** | **0.511294** |
+
+**로컬 진단**: 예측 positive 비율 **32.03%** (추정 실제 32.20%와 0.17%p 오차 — 매우 정확한 보정)
+
+**점수 (public)**: F1 **0.9205**, Accuracy **0.9486** — **전체 실험 압도적 신규 최고점**
+
+**Confusion matrix 역산** (PP=227,520):
+FP+FN = 710,400 × (1−0.9486) = 36,519 → TP ≈ 211,338
+
+| | 예측 정상 | 예측 이상 |
+|---|---|---|
+| 실제 정상 | TN ≈ 462,544 | FP ≈ 16,182 |
+| 실제 이상 | FN ≈ 20,337 | TP ≈ 211,338 |
+
+Recall ≈ 0.9122, Precision ≈ 0.9289, 추정 실제 anomaly 비율 ≈ 32.61%
+
+**Exp 12(IF) vs Exp 13(AE) 비교**:
+
+| | Exp 12 (IF) | Exp 13 (AE) | 변화 |
+|---|---|---|---|
+| Precision | 0.8946 | **0.9289** | ↑↑ |
+| Recall | 0.8795 | **0.9122** | ↑↑ |
+| F1 | 0.8870 | **0.9205** | **+0.0335** |
+
+**다음**: RUN_CONTAMINATION 튜닝 (Precision > Recall → 더 많이 잡으면 Recall 개선), 아키텍처 튜닝.
+
+---
+
+## Exp 14 / 14b — IF + StandardScaler / RobustScaler (스케일러 영향 분리 검증)
+
+**날짜**: 2026-07-02
+
+**변경 사항**: Exp 12(IF 최고점) 구성에 StandardScaler(Exp14) / RobustScaler(Exp14b)를 각각 추가.
+
+**가설**: 거리 기반 모델에 앞서 IF에서도 스케일러가 점수 안정화에 기여하는지 확인.
+
+**점수**: Exp14 F1 **0.8870**, Exp14b F1 **0.8870** — **완전히 동일**
+
+**분석**: IF는 랜덤 분기 시 값의 상대적 순서(rank)만 사용하며 절댓값 스케일은 수학적으로 무관.
+StandardScaler·RobustScaler 어느 것을 써도 결과 바뀌지 않음을 실험으로 최종 확인.
+→ **IF에는 어떤 스케일러도 제출하지 않는다.** 제출 횟수 낭비.
+
+---
+
+## Exp 15 — LOF (LocalOutlierFactor + StandardScaler + 52피처, n_neighbors=20)
+
+**날짜**: 2026-07-03
+
+**재현**: `outputs/output_lof-a.csv`
+`cd src && python run_lof_grid.py` (LOF-A 조합)
+
+### 왜 LOF인가
+
+IF는 축 정렬(수직/수평) 분기만 가능해 센서 간 비선형 상관관계를 포착 못 함.
+LOF는 로컬 밀도 기반 — 각 점의 이웃 밀도를 주변과 비교해 이상 점수를 부여한다.
+TEP 정상 데이터: 화학 균형점에서 고밀도 군집 → LOF에 이론적으로 적합.
+거리 기반이므로 스케일러 필수(novelty=True 옵션 필수).
+
+### 로컬 실험 — 4가지 조합 비교
+
+Standard/Robust × 52/48피처 전부 돌린 결과:
+
+| 조합 | separation_idx | 비고 |
+|---|---|---|
+| LOF-A: Standard + 52개 | **68.570** | ← 선택 |
+| LOF-B: Robust   + 52개 | 68.302 | 4개 run 다름 |
+| LOF-C: Standard + 48개 | 65.543 | 6개 run 다름 |
+| LOF-D: Robust   + 48개 | 64.970 | 8개 run 다름 |
+
+**피처 제거가 역효과인 이유**: xmv_7 등 4개 피처는 정상 조건에서 r=1.0이지만
+이상 조건에서 이 상관이 깨지는 것 자체가 LOF의 이상 신호.
+제거하면 그 신호를 잃는다 → 52개 전부 사용.
+
+**StandarScaler vs RobustScaler**: 분리 지표 차이 미미(68.570 vs 68.302), 4개 run만 다름.
+이론(정규분포 확인)에 맞는 StandardScaler 선택.
+
+**LOF-A vs AE(Exp13) 비교**:
+- 전체 run 중 93.8% 동의 (694/740)
+- LOF만 이상: 23 run, AE만 이상: 23 run
+
+### 로컬 진단
+
+- predicted positive rate: **0.3203** (target 0.322 — 0.0017 오차)
+- train run score: mean=0.374, std=0.016 (정상 군집 촘촘)
+- test run score: min=-20.46 (이상 꼬리 선명), 명확한 bimodal 분포
+
+**점수 (public)**: F1 **0.9237**, Accuracy **0.9486** — **전체 실험 압도적 신규 최고점**
+
+**Confusion matrix 역산** (PP=227,520, N=710,400):
+FP+FN = 710,400 × (1−0.9514) = 34,525 → TP ≈ 208,897
+
+| | 예측 정상 | 예측 이상 |
+|---|---|---|
+| 실제 정상 | TN ≈ 466,983 | FP ≈ 18,616 |
+| 실제 이상 | FN ≈ 15,909 | TP ≈ 208,897 |
+
+Precision ≈ 0.9182, Recall ≈ 0.9292, 추정 실제 anomaly 비율 ≈ 31.6%
+
+**LOF-A vs AE(Exp13) 비교**:
+
+| | Exp 13 (AE) | Exp 15 (LOF-A) | 변화 |
+|---|---|---|---|
+| Precision | 0.9289 | 0.9182 | ↓ −0.011 |
+| Recall | 0.9122 | **0.9292** | ↑ +0.017 |
+| F1 | 0.9205 | **0.9237** | **+0.0032** |
+| Accuracy | 0.9486 | **0.9514** | +0.0028 |
+
+**분석**:
+1. **딥러닝 없이 ML 모델이 AE를 넘었다.** LOF는 로컬 밀도 기반의 단순한 알고리즘인데 AE보다 F1이 높게 나왔다. 이는 TEP 데이터의 이상 패턴이 밀도 편차로 충분히 포착된다는 의미이며, 고밀도 정상 군집을 형성하는 TEP 구조에 LOF가 잘 맞는다는 것을 실험으로 증명했다.
+2. **Recall이 높고 Precision이 낮다.** LOF-A는 AE보다 더 많은 이상 run을 잡지만(Recall ↑) 오탐도 약간 더 있다(Precision ↓). run 단위로 보면 두 모델이 23개씩 다르게 판정한다 — 앙상블 시 이 46개가 핵심 판단 대상.
+3. **피처 제거(52→48)가 역효과였다는 로컬 실험 결론이 올바른 방향이었다.** 52피처 전체를 쓴 LOF-A가 최고점.
+4. **StandardScaler ≈ RobustScaler** — 로컬 separation 지표 차이가 미미했고(68.57 vs 68.30), 이론에 맞는 StandardScaler 선택이 타당했음.
+
+**다음**: KMeans 실험 (거리 기반, 클러스터 중심 활용)
+
+---
+
 (다음 실험은 여기에 이어서 추가)

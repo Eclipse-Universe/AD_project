@@ -47,7 +47,3 @@ AD_project/
 pip install -r baseline_code/requirements.txt
 cd src && python run_experiment.py
 ```
-
-## 데이터
-
-`data/train.csv`, `data/test.csv`는 용량 문제로 저장소에 포함하지 않는다.
