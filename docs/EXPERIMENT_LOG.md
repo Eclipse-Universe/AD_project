@@ -1135,7 +1135,47 @@ Separation index가 460 → 469로 소폭 올랐으나 **이진 예측(237개 ru
 Global Σ⁻¹ + k 증가 방향은 천장에 닿았다. 다음 단계는 **GMM (per-component Σ_k)** — sklearn의
 `GaussianMixture(covariance_type='full')`으로 각 성분마다 자체 공분산 행렬을 학습하는 방식.
 
-**다음 우선순위**: GMM 실험 → AE 개선 (bottleneck 16)
+---
+
+## Exp 20 — GMM run-level (n_components 탐색)
+
+**날짜**: 2026-07-03
+
+**재현**: `cd src && python run_gmm_grid.py`
+
+### 변경 내용 및 근거
+
+KMeans-Mahal k=100 실험에서 Global Σ⁻¹ + k 증가 방향의 천장 확인 (이진 예측 불변).
+GMM으로 전환해 두 가지 한계를 동시에 극복:
+1. 하드 할당 → 소프트 할당 (EM 기반)
+2. Global Σ⁻¹ → Per-component Σ_k (운전 구간별 상관 구조 개별 학습)
+
+**row-level이 아닌 run-level 벡터로 학습한 이유**:
+row-level(250K행) full covariance GMM은 EM 반복당 52×52 행렬 k개 추정으로 계산 비용이
+수십 분 이상 소요됨 (실측). run 평균 벡터(500×52)로 전환 시 수 초 내 완료, 수치 안정성도 확보
+(500/k ≥ 25행/성분).
+
+### 로컬 결과
+
+| k | LOF-A 일치 | Mahal 일치 | GMM-only run |
+|---|---|---|---|
+| 5 | **686/740** | **688/740** | 26~27 |
+| 10 | 682/740 | 684/740 | 28~29 |
+| 20 | 672/740 | 670/740 | 34~35 |
+
+**주의**: separation index (수십만 단위)는 log-likelihood 스케일로, Mahalanobis 거리 스케일과
+직접 비교 불가. 실질 판단 기준은 LOF/Mahal 일치도.
+
+**k=5 선택 이유 (스크립트 자동 선택 k=20 대신)**:
+- k=20은 GMM-only 35 run으로 검증된 모델 대비 불일치가 너무 큼
+- k=5가 LOF/Mahal과 가장 가까운 합의 형성 (686~688/740)
+- 고유 플래그 26개로 리스크 최소화
+
+**제출 파일**: `output_exp20(GMM).csv` (k=5)
+
+**점수 (public)**: 제출 후 기록 예정
+
+**다음 우선순위**: GMM 결과 확인 → AE 개선 (bottleneck 16)
 
 ---
 

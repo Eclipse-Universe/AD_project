@@ -248,9 +248,10 @@ Euclidean이 실패한 구체적 패턴 (형태 B 이상):
 | KMeans-Euclid 실험 | 완료 | F1 0.9083 — 피처 독립 가정으로 형태 B 이상 미포착 |
 | KMeans-Mahal 실험 | 완료 | F1 0.9277, **전체 최고점** — 상관 파괴 이상 포착 |
 | KNN run-level | 완료 | F1 0.8559 — LOF/Mahal보다 낮음, 앙상블 기여도 낮음 |
+| KMeans-Mahal k=100 | 완료(미제출) | sep 469, 이진 예측 k=50과 동일 → k 증가 방향 천장 확인 |
+| GMM (per-Σ_k) | 진행 중 | KMeans-Mahal 구조적 한계 극복 시도 |
 | OC-SVM | 포기 | 선형 커널 한계 + 학습 시간 |
-| 앙상블 | 보류 | ML 모델 전부 완료 후 |
-| AE 개선 (bottleneck=16) | 보류 | ML 탐색 완료 후 |
+| AE 개선 (bottleneck=16) | 보류 | GMM 완료 후 |
 
 ---
 
@@ -267,6 +268,48 @@ Euclidean이 실패한 구체적 패턴 (형태 B 이상):
 - **AE bottleneck 크기**: 멘토 제안 16 vs 현재 8 → ML 완료 후 실험
 - **RUN_CONTAMINATION fine-tuning for Mahal**: Recall(0.9361) > Precision(0.9195) 격차 0.017
   → 0.31 시도 여지 있으나 현재 F1이 최고점이므로 KNN 먼저
+
+---
+
+## 5-2. GMM 전략 선택 근거 (2026-07-03)
+
+### KMeans-Mahal의 천장 확인
+
+k=50→100 실험에서 separation index 460→469로 소폭 개선됐으나 이진 예측(237 run)이 완전히 동일.
+Global Σ⁻¹ + k 증가 방향은 더 이상 F1 개선으로 이어지지 않음이 실험적으로 확인됐다.
+
+### GMM을 선택한 이유
+
+**현재 구조의 두 가지 한계:**
+1. KMeans 하드 할당: 각 row를 가장 가까운 군집 하나에만 배정 → 군집 경계의 모호한 점 처리 불안정
+2. Global Σ⁻¹: 250K 훈련 행 전체의 평균 공분산 → 운전 구간별로 다른 센서 상관 구조를 하나의 값으로 평균냄
+
+**TEP의 물리적 구조**: 반응 부하, 공급 조건, 냉각 상태 등이 다른 여러 운전 조건이 공존(Downs & Vogel, 1993).
+각 운전 구간의 센서 간 상관이 다를 경우, Global Σ⁻¹은 부정확한 근사다.
+
+**GMM의 해결 방식:**
+```
+p(x) = Σ_k  π_k · N(x | μ_k, Σ_k)
+```
+- 소프트 할당: 모든 성분에 확률적 기여 → 경계 케이스에 더 안정적
+- Per-component Σ_k: 각 운전 구간 고유 상관 구조를 개별 학습
+- 이상 점수 −log p(x): 어느 운전 구간과도 맞지 않으면 모든 Σ_k 기준에서 확률 낮음 → 점수 높음
+
+**수치 안정성**: 훈련 행 250K / n_components=50 = 5,000행/성분 → 52×52 Σ_k 추정 충분히 안정
+
+**이론적 근거:**
+- Bishop (2006) PRML Ch.9: GMM EM 추정 및 로그우도 밀도 추정 이론
+- Markou & Singh (2003) Pattern Recognition Letters: GMM novelty detection 타당성
+- Yin et al. (2012) Journal of Process Control: TEP에서 다변량 공분산 활용의 유효성
+
+### GMM 실험 설계
+
+- `sklearn.mixture.GaussianMixture(covariance_type='full')`
+- n_components 탐색: {10, 20, 50}
+- 이상 점수: `−score_samples(x)` (낮을수록 이상, 기존 모델과 방향 통일)
+- run-level 집계: 기존과 동일 (row 점수 → run 평균 → 상위 32% 판정)
+
+---
 
 ### 마할라노비스 거리의 성공 요인 (확정)
 
