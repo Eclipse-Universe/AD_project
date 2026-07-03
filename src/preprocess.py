@@ -4,6 +4,7 @@
 컬럼을 "이름"으로 선택하므로(위치 기반 아님) train/test 양쪽 모두 안전하다.
 """
 import pandas as pd
+from sklearn.preprocessing import RobustScaler, StandardScaler
 
 NUMERIC_COLS = [
     'xmeas_1', 'xmeas_10', 'xmeas_11', 'xmeas_12', 'xmeas_13', 'xmeas_14',
@@ -25,4 +26,37 @@ def select_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_diff_features(df: pd.DataFrame) -> pd.DataFrame:
     diff_df = df.groupby("simulationRun")[NUMERIC_COLS].diff().fillna(0)
     return diff_df.add_suffix("_diff")
+
+
+# 완전/거의 완전 상관 쌍에서 제거 확정 피처 (EDA_SUMMARY.md 참고)
+# xmeas_12↔xmv_7(r=1.000), xmeas_15↔xmv_8(r=1.000),
+# xmeas_17↔xmv_11(r=-0.999), xmeas_1↔xmv_3(r=0.997)
+REDUNDANT_COLS = ["xmv_3", "xmv_7", "xmv_8", "xmv_11"]
+NUMERIC_COLS_REDUCED = [c for c in NUMERIC_COLS if c not in REDUNDANT_COLS]
+
+
+def select_features_reduced(df: pd.DataFrame) -> pd.DataFrame:
+    """고상관 중복 피처 4개 제거한 48개 피처 반환."""
+    return df[NUMERIC_COLS_REDUCED]
+
+
+def fit_scaler(X: pd.DataFrame, scaler_type: str = "standard"):
+    """train 데이터에만 fit. test에는 transform만.
+
+    scaler_type: "standard" (평균/표준편차) 또는 "robust" (중앙값/IQR, 이상치에 강함)
+    """
+    cols = [c for c in NUMERIC_COLS if c in X.columns]
+    if scaler_type == "robust":
+        scaler = RobustScaler()
+    else:
+        scaler = StandardScaler()
+    scaler.fit(X[cols])
+    return scaler
+
+
+def scale_features(X: pd.DataFrame, scaler) -> pd.DataFrame:
+    """fit된 scaler로 X를 정규화. index 보존."""
+    cols = [c for c in NUMERIC_COLS if c in X.columns]
+    scaled = scaler.transform(X[cols])
+    return pd.DataFrame(scaled, columns=cols, index=X.index)
 
