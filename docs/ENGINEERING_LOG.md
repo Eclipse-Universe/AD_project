@@ -249,7 +249,7 @@ Euclidean이 실패한 구체적 패턴 (형태 B 이상):
 | KMeans-Mahal 실험 | 완료 | F1 0.9277, **전체 최고점** — 상관 파괴 이상 포착 |
 | KNN run-level | 완료 | F1 0.8559 — LOF/Mahal보다 낮음, 앙상블 기여도 낮음 |
 | KMeans-Mahal k=100 | 완료(미제출) | sep 469, 이진 예측 k=50과 동일 → k 증가 방향 천장 확인 |
-| GMM (per-Σ_k) | 진행 중 | KMeans-Mahal 구조적 한계 극복 시도 |
+| GMM k=5 run-level | 완료 | F1 **0.9367** 전체 최고 — 단, 파라미터>>데이터 과적합 우려 |
 | OC-SVM | 포기 | 선형 커널 한계 + 학습 시간 |
 | AE 개선 (bottleneck=16) | 보류 | GMM 완료 후 |
 
