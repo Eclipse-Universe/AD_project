@@ -247,7 +247,7 @@ Euclidean이 실패한 구체적 패턴 (형태 B 이상):
 | LOF 실험 | 완료 | LOF-A(Standard+52피처) F1 0.9237, 전체 최고 |
 | KMeans-Euclid 실험 | 완료 | F1 0.9083 — 피처 독립 가정으로 형태 B 이상 미포착 |
 | KMeans-Mahal 실험 | 완료 | F1 0.9277, **전체 최고점** — 상관 파괴 이상 포착 |
-| KNN run-level | 완료 | k=5, sep=137, LOF/Mahal과 89% 일치 (앙상블 타이브레이커 역할 예상) |
+| KNN run-level | 완료 | F1 0.8559 — LOF/Mahal보다 낮음, 앙상블 기여도 낮음 |
 | OC-SVM | 포기 | 선형 커널 한계 + 학습 시간 |
 | 앙상블 | 보류 | ML 모델 전부 완료 후 |
 | AE 개선 (bottleneck=16) | 보류 | ML 탐색 완료 후 |
@@ -258,7 +258,7 @@ Euclidean이 실패한 구체적 패턴 (형태 B 이상):
 
 - **RobustScaler vs StandardScaler**: LOF/KMeans/KNN에서 어느 쪽이 더 좋은가? → 실험으로 결정
 - **피처 제거 (52→48)**: 중복 피처 제거가 거리 기반 모델의 bimodality를 개선하는가? → 실험으로 결정
-- **KNN run-level 앙상블 가치**: LOF·Mahal과 89% 일치 (vs 두 모델 상호 93.8% 일치). KNN만의 40개 플래그는 다수결에서 자동 제외 → 품질 리스크 낮음. 가치는 LOF vs Mahal 불일치 46개 run에서 타이브레이커 역할.
+- **KNN run-level 결과 (Exp 18, F1=0.8559)**: LOF·Mahal 대비 크게 낮음. run 평균 벡터 + Euclidean 거리 방식은 공분산 보정(Mahal)·로컬 밀도(LOF)를 대체하지 못함. 앙상블 기여도 낮음으로 판단 — 대신 Mahal RC 튜닝(Exp 19)과 AE 개선에 집중.
 - **앙상블 구성**: LOF + KMeans-Mahal + KNN 점수 결합. 각 모델의 강점이 다름:
   - LOF: 로컬 밀도 기반 (Precision 안정적)
   - KMeans-Mahal: 글로벌 공분산 보정 거리 (Recall 최고)
