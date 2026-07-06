@@ -385,3 +385,76 @@ k=30 선택 이유:
 k=30 SPE가 Mahal보다 GMM에 가까운 것은 긍정적 신호:
 GMM이 이미 Mahal보다 성능이 높고(0.9277→0.9372), SPE가 같은 방향에 있음.
 
+
+### run_pca_grid.py 코드 구조 및 각 단계 설명
+
+**전체 흐름**:
+```
+훈련 행 250K개 → PCA 학습(k개 고유벡터) → 정상 부분공간 정의
+                                                   ↓
+테스트 행 710K개 → SPE/T² 행 단위 계산 → run 평균 집계 → 임계값 → 이진 예측
+```
+
+**1단계 — 데이터 준비**:
+프로젝트 공통 전처리 파이프라인(`select_features`, `fit_scaler`, `scale_features`) 재사용.
+scaler는 훈련 데이터에서만 fit, 테스트에는 transform만 적용해 data leakage 방지.
+
+**2단계 — PCA 학습 (k별 반복)**:
+```python
+pca = PCA(n_components=k, random_state=42)
+pca.fit(train_X.values)   # 250,000 × 52
+```
+sklearn PCA 내부: 52×52 공분산 행렬 계산 → 고유분해 → 분산 내림차순으로 k개 고유벡터 선택.
+이 k개 방향(주성분)이 "정상 운전 부분공간"을 정의한다.
+
+**3단계 — SPE/T² 계산 (compute_spe_t2 함수)**:
+```python
+scores = pca.transform(X)           # N×52 → N×k 투영
+X_hat  = pca.inverse_transform(scores)  # N×k → N×52 복원
+spe    = np.sum((X - X_hat)**2, axis=1)               # 행마다 재구성 오차
+t2     = np.sum(scores**2 / pca.explained_variance_, axis=1)  # 행마다 T²
+```
+- `pca.explained_variance_`: 각 주성분의 고유값 λ_j (분산량)
+- T²에서 scores²/λ_j: 각 주성분 방향의 변동을 해당 방향의 정상 분산으로 표준화
+- 두 통계 모두 행(타임스텝) 단위로 계산 → 250K/710K개의 스칼라값
+
+**4단계 — run 집계 및 임계값 (run_to_pred 함수)**:
+```python
+run_sc    = score_s.groupby(run_ids.values).mean()          # 960행 → run 1개
+threshold = np.quantile(run_sc.values, 1 - RUN_CONTAMINATION)  # 68분위수
+pred_run  = (run_sc >= threshold).astype(int)               # 상위 32% = 이상
+```
+GMM/LOF와 동일한 집계 방식. 방향만 다름: GMM은 하위 32%(log p(x)가 낮을수록 이상),
+SPE/T²는 상위 32%(높을수록 이상). 이를 위해 `1 - RUN_CONTAMINATION` 분위수를 임계값으로 사용.
+
+**5단계 — 분리 지수 비교**:
+```python
+spe_row_sep = (te_spe.mean() - tr_spe.mean()) / tr_spe.std()   # 행 단위
+spe_run_sep = (run_spe.mean() - tr_run_spe.mean()) / tr_run_spe.std()  # run 단위
+```
+행 단위와 run 단위 분리 지수를 분리해서 계산. 행 단위는 잡음 포함, run 단위가 실제 탐지력에 가까움.
+주의: sep 지수 스케일은 점수의 단위에 따라 달라져 모델 간 직접 비교 불가
+     (GMM: 로그우도 스케일 ~600K, PCA-SPE: 재구성 오차 스케일 ~2K).
+
+### Exp 22 결과에서 확인된 구조적 발견
+
+**F1=0.9167 (GMM 0.9372 대비 −0.0205) — 구조적 열세의 원인**:
+
+| 축 | PCA-SPE | GMM |
+|---|---|---|
+| 학습 단위 | 행(250K 타임스텝) | run 평균 벡터(500개) |
+| 점수 단위 | 행별 재구성 오차 → run 평균 | run 벡터의 log p(x) |
+| run 판별 방식 | 간접 (행 점수 집계) | 직접 (run 벡터 밀도 추정) |
+
+TEP 테스트 run은 이상이라도 초반 타임스텝은 정상으로 시작하는 경우가 있다.
+PCA-SPE는 이 정상 타임스텝의 낮은 SPE가 평균에 포함돼 이상 run의 신호를 희석시킨다.
+GMM은 run 전체 평균 벡터를 직접 밀도 추정하므로 이 문제를 구조적으로 회피한다.
+
+**핵심 원칙 도출**: 이 문제(run-level 이진 분류)에서 "행 단위 점수 → run 집계" 구조보다
+"run 단위 표현 → 직접 모델링" 구조가 일관되게 우수하다.
+
+| 방식 | 대표 모델 | F1 |
+|---|---|---|
+| run 단위 직접 모델링 | GMM, KMeans-Mahal | 0.9372, 0.9277 |
+| 행 단위 집계 | PCA-SPE, LOF, AE | 0.9167, 0.9237, 0.9205 |
+
