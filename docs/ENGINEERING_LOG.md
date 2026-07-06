@@ -538,3 +538,115 @@ OC-SVM + RBF는 서포트 벡터 기반으로 임의 형태의 비선형 경계�
 
 ---
 
+
+---
+
+## 5-5. OC-SVM 실패 종합 분석 및 GMM+Mahal 앙상블 전략 (2026-07-06)
+
+### OC-SVM 실패의 근본 원인 (Exp 5~7, Exp 23 종합)
+
+**Exp 5~7 (행 단위 SGDOneClassSVM, F1=0.38)**과 **Exp 23 (run-level OneClassSVM RBF, F1=0.7866)**
+모두 성능이 낮았다. 단순 hyperparameter 문제가 아닌 세 가지 구조적 원인이 작용했다.
+
+**① 단일 경계(hyperplane)와 다봉 정상 분포의 불일치**
+
+```
+GMM이 모델링하는 정상 분포:           OC-SVM이 찾는 경계:
+  [Regime A]  [Regime B]              ┌─────────────────────┐
+    ●●●          ●●●          vs      │  ●●●    ○○○    ●●●  │
+      ●            ●                  └─────────────────────┘
+  [Regime C]                          (regime 간 빈 공간도 '정상'으로 포함)
+    ●●●
+```
+
+TEP 정상 run은 여러 운전 구간(regime)에서 각자 다른 클러스터를 형성한다.
+GMM k=5는 각 regime을 독립적으로 모델링한다.
+OC-SVM은 이 모든 클러스터를 단일 초평면으로 감싼다.
+Regime 사이 빈 공간도 "정상"으로 포함되어, 해당 공간에 위치한 이상 run을 탐지하지 못한다.
+
+**② 점수(score)의 정보량 차이**
+
+| 모델 | 점수 의미 | 다봉 구조에서 한계 |
+|---|---|---|
+| GMM | log p(x) = 전체 밀도 | 각 regime 고유 밀도 기준으로 평가 |
+| OC-SVM | 초평면까지 부호 거리 | 단일 경계 기준 → 복잡한 정상 구조 반영 불가 |
+
+로컬 분리 지수(sep)가 27.5였음에도 F1=0.7866이 나온 것은 sep 지수가 초평면 거리 스케일로
+측정되어 실제 탐지력과 괴리가 있었기 때문이다 (OC-SVM sep과 GMM sep의 스케일은 다름).
+
+**③ nu vs RUN_CONTAMINATION 구조 불일치**
+
+OC-SVM의 nu: 훈련 오탐율 상한 (nu=0.05 → 훈련 run 5% = 25개를 경계 밖 허용)
+RUN_CONTAMINATION=0.32: 테스트 run 32%를 이상으로 판정
+
+학습 시 5% 오탐 기준으로 학습한 경계에 테스트 시 32% 기준을 적용.
+경계 안쪽의 많은 영역이 "정상"으로 표시되어 이상 run을 놓침.
+
+**④ gamma='scale' 실효값 상승 문제 (추가 발견)**
+
+scaler가 250K 행 기준으로 fit되었으므로 run 평균 벡터는 표준편차가 약 1/√500 수준.
+gamma='scale' = 1/(52 × var_run_vecs) ≈ 1/(52 × 0.002) ≈ 9.6 으로 급등.
+RBF 커널이 극도로 좁아져 분리 지수가 0.4~1.2에 그침. gamma='auto'(=1/52)를 사용해야 함.
+
+**결론**: OC-SVM은 hyperparameter 조정으로 해결 불가. 알고리즘 자체가 이 문제 구조에 맞지 않음.
+
+---
+
+### GMM + KMeans-Mahal 앙상블 전략
+
+#### 왜 앙상블인가
+
+GMM-tied (Exp21, F1=0.9372)와 KMeans-Mahal (Exp17, F1=0.9277)은 각각 다른 24개 run을 탐지한다:
+
+```
+전체 740 test run
+  ├── GMM ∩ Mahal 모두 이상: ~213 run  (두 모델 합의 → TP 가능성 높음)
+  ├── GMM만 이상:              24 run  (GMM 고유 탐지)
+  ├── Mahal만 이상:            24 run  (Mahal 고유 탐지)
+  └── 두 모델 모두 정상:      ~479 run
+```
+
+GMM-only 24개와 Mahal-only 24개 run 중 일부가 실제 TP라면,
+두 점수를 결합하면 각자의 blind spot을 보완해 F1이 개선될 수 있다.
+
+#### 두 모델의 구조적 차이
+
+| | GMM-tied (Exp21) | KMeans-Mahal (Exp17) |
+|---|---|---|
+| 학습 단위 | run 평균 벡터 (500개) | 행 단위 (250K개) |
+| 공분산 | Per-component Σ_k (regime별) | 글로벌 Σ (전체 통합) |
+| 점수 | log p(x): 밀도 기반 | Mahal 거리: 클러스터 중심까지 |
+| 강점 | 운전 구간별 이상 패턴 포착 | 센서 상관 붕괴 탐지 |
+
+이 두 모델은 같은 run을 다른 각도로 본다 → 앙상블이 이론적으로 유효.
+
+#### 앙상블 구현 방법
+
+**1단계: 점수 방향 통일** (높을수록 이상)
+- GMM: `-score_samples()` (부호 반전)
+- Mahal: `-decision_function()` = `min_mahal_dist` (이미 높을수록 이상)
+
+**2단계: Z-score 정규화** (훈련 run 점수 기준)
+```
+z_gmm   = (gmm_score   - μ_gmm_train)   / σ_gmm_train
+z_mahal = (mahal_score - μ_mahal_train) / σ_mahal_train
+```
+서로 다른 스케일(GMM: 로그우도, Mahal: 거리)을 표준화 단위로 맞춤.
+
+**3단계: 가중합**
+```
+ensemble = α × z_gmm + (1-α) × z_mahal
+```
+α 탐색: {0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8}
+- α → 1: GMM 단독에 수렴 (이미 0.9372)
+- α → 0: Mahal 단독에 수렴 (이미 0.9277)
+- 최적 α: GMM-only TP와 Mahal-only TP를 모두 포착하는 지점
+
+**4단계: 임계값 및 예측**
+앙상블 점수 상위 32%(RUN_CONTAMINATION)를 이상 run으로 판정.
+
+**기대 결과**:
+- 낙관적: GMM-only/Mahal-only 각 24 run 중 실제 TP 비율에 따라 F1 0.94+ 가능
+- 보수적: 두 모델의 고유 탐지가 FP 비율도 비슷하다면 GMM 단독 수준 유지
+- 확인 불가 (로컬): 실제 정답 라벨이 없어 제출 전까지 정확한 추정 불가
+
