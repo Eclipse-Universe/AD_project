@@ -1524,9 +1524,28 @@ Exp24(F1=0.9620)에 LOF(Exp15, F1=0.9237)를 추가. LOF의 22개 unique run 중
 
 **제출 파일**: `output_exp25(Ensemble3-LOF10).csv`
 
-**점수 (public)**: F1 **(제출 대기)**, Accuracy **—**
+**점수 (public)**: F1 **0.9623**, Accuracy **0.9757**
 
-**분석**: (결과 수신 후 기록)
+**Exp24 대비**: F1 +0.0003, Accuracy 동일 — 2 run 교환이 순방향이었음 확인
+
+**전체 모델 비교 (최종 업데이트)**:
+
+| 모델 | F1 | Accuracy |
+|---|---|---|
+| **Ensemble3 GMM+Mahal+LOF (Exp25)** | **0.9623** | **0.9757** |
+| Ensemble2 GMM+Mahal α=0.5 (Exp24) | 0.9620 | 0.9757 |
+| GMM tied (Exp21) | 0.9372 | 0.9595 |
+| KMeans-Mahal (Exp17) | 0.9277 | 0.9541 |
+| LOF (Exp15) | 0.9237 | 0.9514 |
+| PCA-SPE (Exp22) | 0.9167 | 0.9459 |
+| OC-SVM run-level (Exp23) | 0.7866 | 0.8622 |
+
+**분석**:
+2 run 변화(1,920행)에서 +0.0003 개선. LOF 10% 추가가 미세하지만 실질적 기여를 함.
+Accuracy 동일(0.9757)이고 F1만 소폭 상승 → FP/FN 구성비가 미세하게 개선된 것.
+현재 F1=0.9623, Accuracy=0.9757 수준에서 추가 개선 여지는 매우 작아지고 있음.
+
+**다음 우선순위**: LOF 비중 증가(0.3~0.34) 또는 RUN_CONTAMINATION 조정 검토
 
 ---
 
