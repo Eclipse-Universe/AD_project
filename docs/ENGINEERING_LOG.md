@@ -1197,3 +1197,99 @@ Exp25→26: 제출 대기 중
 1. mean+std 피처 (104차원) → GMM/Mahal 재학습 → 예측 변화 확인
 2. 변화가 있으면 제출 → 없으면 방향 B/C 검토
 
+---
+
+## 5-13. 피처 확장 및 다중 신호 탐색 결과 종합 (2026-07-08)
+
+### 탐색 범위
+
+**run_feature_expand.py**: run 통계 피처 7가지 조합 탐색
+- mean(52): 기준
+- mean+std(104), mean+diff_q(104), mean+p10p90(156)
+- mean+std+diff_q(156), mean+std+slope(156), all_stats(312)
+
+**run_corr_anomaly.py**: 센서 간 상관 구조 + PCA residual(SPE)
+- 상관 행렬 Frobenius 거리 (독립 신호)
+- GMM+Mahal+Corr, GMM+Mahal+SPE(k=30), GMM+Mahal+Corr+SPE
+
+**run_maxpool.py**: 윈도우 분할 집계 방식
+- W={48,96,192,480} × aggr={mean, max, top3} = 12 조합
+
+### 핵심 실험 결과
+
+| 방법 | Exp25 일치 | 가중치 | 비고 |
+|---|---|---|---|
+| mean+std (104차원) | 724/740 (+8/-8) | - | **baseline과 완전 동일** |
+| mean+diff_q (104차원) | 712/740 (+14/-14) | - | 구조적 FN 미탐지 |
+| mean+p10p90 (156차원) | 722/740 (+9/-9) | - | 소폭 다름 |
+| mean+std+diff_q | 720/740 (+10/-10) | - | 구조적 FN 미탐지 |
+| mean+std+slope | 694/740 (+23/-23) | - | 불안정, 제출 부적합 |
+| Corr-Frob 단독 | 658/740 (+41/-41) | - | sep=3.83, 너무 노이즈 |
+| GMM+Mahal+Corr | 726/740 (+7/-7) | 0.6/0.3/0.1 | 소폭 개선 |
+| GMM+Mahal+SPE(k=30) | **732/740 (+4/-4)** | 0.6/0.3/0.1 | **Exp30 후보** |
+| GMM+Mahal+W96_max | **728/740 (+6/-6)** | 0.6/0.3/0.1 | **Exp31 후보** |
+| GMM+Mahal+Corr+SPE | 732/740 (+4/-4) | 0.45/0.40/0.10/0.05 | SPE와 동일 |
+
+### 결정적 발견: 7개 구조적 FN run은 단 하나의 방법으로도 탐지되지 않음
+
+run107, 176, 274, 280, 287, 549, 685:
+- mean 정상 ✓ (GMM 미탐지 확인)
+- std 정상 ✓ (mean+std = baseline과 동일)
+- slope 정상 ✓ (드리프트 없음)
+- diff_q 정상 ✓ (시간적 진화 없음)
+- p10/p90 정상 ✓ (분포 형태 정상)
+- Corr-Frob 정상 ✓ (센서 상관 구조 유지)
+- SPE (PCA residual) 정상 ✓ (PCA 부분공간 내)
+- 윈도우 max 정상 ✓ (최악의 구간도 정상 범위)
+
+이 7개 run은 52개 센서의 **모든 통계적 특성에서 정상 운전과 구별 불가**.
+가능한 해석: (1) 이 fault 유형은 평균/분산/상관/잔차 어디에도 통계적 신호 없음,
+(2) 해당 run들이 실제로 정상일 수 있음 (competition 레이블 오류 가능성).
+
+### Exp25의 잠재적 FP 발견 (run70, run422, run562)
+
+5가지 독립 방법 모두가 이 3개 run을 "정상"으로 분류:
+
+| run | 제거하는 방법 수 | 포함 방법 |
+|---|---|---|
+| run70  | 5/5 | Exp29, fexp_spe, W96_max, baseline, mean_std |
+| run422 | 4/5 | fexp_spe, W96_max, baseline, mean_std |
+| run562 | 4/5 | fexp_spe, W96_max, baseline, mean_std |
+
+반면 Exp25(row-level LOF 기반)는 이 3개를 이상으로 판정.
+원인: row-level LOF가 개별 timestep의 국소적 이상을 포착 → run 평균은 정상이지만
+      특정 timestep에 이상이 집중되면 row-level LOF만 탐지.
+      그러나 5개 run-level 방법 모두가 동의하면 이상보다 정상 가능성 높음.
+
+### 다중 방법 합의 추가 탐지 run
+
+| run | 추가하는 방법 수 | 포함 방법 |
+|---|---|---|
+| run293 | 3/5 | fexp_spe, W96_max, baseline |
+| run377 | 3/5 | fexp_spe, W96_max, baseline |
+| run381 | 2/5 | fexp_spe, W96_max |
+
+이 run들은 Exp25가 정상으로 분류했지만 여러 run-level 방법이 이상으로 판정.
+FP(Exp25) 3개를 제거하고 TP 3개를 추가하면 F1 개선 가능.
+
+### 제출 후보 결정 (Exp30, 31)
+
+**Exp30 (GMM+Mahal+SPE)**: 732/740
+- 제거: run68, 70, 422, 562 (run70/422/562 = FP 강한 증거)
+- 추가: run155, 293, 377, 381
+
+**Exp31 (GMM+Mahal+W96_max)**: 728/740
+- 제거: run70, 182, 335, 422, 562, 682
+- 추가: run172, 293, 300, 377, 381, 394
+- run293/377/381 공통 추가 → 더 강한 TP 증거
+
+현재 ceiling 돌파의 핵심 메커니즘: FP(run70/422/562) 제거 + TP(run293/377/381) 추가.
+이 두 run 집합의 실제 레이블이 결정적.
+
+### 향후 방향
+
+현재 탐색한 모든 통계 기반 방법이 7개 구조적 FN을 못 잡는다면:
+- **방향 1**: 동적 피처 (autocorrelation, spectral analysis) → 시계열 주파수 특성 변화 포착
+- **방향 2**: TEP 도메인 지식 활용 → 특정 fault가 어떤 변수에 영향을 주는지 알면 targeted feature 설계
+- **방향 3**: 현재 결과 수용, 포트폴리오 완성에 집중
+

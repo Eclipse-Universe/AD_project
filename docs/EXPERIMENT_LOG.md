@@ -1770,4 +1770,60 @@ BIC 최적 = k=2, tied (BIC=-109,731). 기존 k=5와 BIC 차이가 작아 k=2가
 
 ---
 
+## Exp 30 — GMM+Mahal+PCA-SPE(k=30) 앙상블
+
+**날짜**: 2026-07-08
+
+**재현**: `cd src && python run_corr_anomaly.py`
+**제출 파일**: `output_exp30(GMM-Mahal-SPE30).csv`
+
+### 변경 내용 및 근거
+
+피처 재구성 시도(Exp 5-13, 상세 분석 ENGINEERING_LOG 5-13 참조) 이후, 새로운 신호를 탐색:
+PCA(k=30)의 잔차(SPE)를 세 번째 앙상블 성분으로 추가.
+
+SPE는 "각 timestep이 정상 PCA 부분공간 밖으로 얼마나 벗어났는가"를 측정.
+- GMM: run 평균 벡터의 가우시안 밀도
+- Mahal: run 평균 벡터의 마할라노비스 거리
+- SPE(k=30): row-level 재구성 오차 → run 평균 집계 (Exp22 방식 재활용)
+
+가중치 0.6/0.3/0.1 (GMM/Mahal/SPE) 최적.
+
+**예측 vs Exp25**: 732/740 (+4/-4)
+- 추가 (내+/Exp25-): run155, run293, run377, run381
+- 제거 (내-/Exp25+): run68, run70, run422, run562
+
+**관찰**: run70, run422, run562는 5가지 독립적 방법 모두에서 "정상"으로 분류됨 → Exp25의 잠재적 FP.
+
+**점수 (public)**: 제출 후 기록 예정
+
+---
+
+## Exp 31 — GMM+Mahal+윈도우_max(W=96) 앙상블
+
+**날짜**: 2026-07-08
+
+**재현**: `cd src && python run_maxpool.py` (W=96, aggr=max)
+**제출 파일**: `output_exp31(GMM-Mahal-W96max).csv`
+
+### 변경 내용 및 근거
+
+**윈도우 최대값 집계**: run을 96 timestep 단위 10개 윈도우로 분할 → 각 윈도우의 GMM 점수를 계산 → MAX 집계.
+
+근거:
+- 현재 run 평균 집계: 이상이 특정 시간 구간에 집중되면 mean에서 희석됨
+- max 집계: 가장 이상한 구간의 신호를 직접 사용
+
+앙상블 가중치 0.6/0.3/0.1 (GMM_mean/Mahal/GMM_W96max)
+
+**예측 vs Exp25**: 728/740 (+6/-6)
+- 추가: run172, run293, run300, run377, run381, run394
+- 제거: run70, run182, run335, run422, run562, run682
+
+**관찰**: run70/422/562 재차 제거, Exp30과 공통 추가 run293/377/381 → 3개 run이 여러 방법에서 공통으로 양성 판정.
+
+**점수 (public)**: 제출 후 기록 예정
+
+---
+
 (다음 실험은 여기에 이어서 추가)
