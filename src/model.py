@@ -106,6 +106,60 @@ class KMeansMahalanobisDetector:
         return -min_dists                           # 음수화: 낮을수록 이상
 
 
+class LocalMahalanobisDetector:
+    """KMeans + 클러스터별 마할라노비스 거리 (Local Mahal).
+
+    Global KMeansMahalanobisDetector의 한계:
+      전체 훈련 데이터의 단일 Σ⁻¹ 사용 → 서로 다른 운전 조건의 공분산이 평균됨.
+
+    TEP 물리 배경:
+      반응 부하·공급 조건·냉각 상태가 다른 여러 운전 조건이 공존하므로
+      각 조건에서 센서 상관 구조가 다르다. 이를 하나의 Global Σ⁻¹로 근사하면
+      운전 조건 간 전환점 근처의 이상을 제대로 포착하지 못할 수 있다.
+
+    Local Mahal:
+      클러스터 k 소속 샘플로 Σ_k를 개별 추정.
+      d(x, k) = sqrt[(x−μ_k)ᵀ Σ_k⁻¹ (x−μ_k)]
+      min_k d(x, k) 를 이상 점수로 사용.
+
+    규칙: decision_function() → 낮을수록 이상 (거리 음수화, 다른 모델과 방향 통일).
+    """
+
+    def __init__(self, n_clusters: int = 50, reg: float = 1e-6,
+                 random_state: int = 42):
+        self.n_clusters  = n_clusters
+        self.reg         = reg
+        self.model       = KMeans(n_clusters=n_clusters,
+                                  random_state=random_state, n_init="auto")
+        self.cov_invs_: list[np.ndarray] = []
+        self.centers_:  np.ndarray | None = None
+
+    def fit(self, X: pd.DataFrame) -> "LocalMahalanobisDetector":
+        X_arr  = X.values if hasattr(X, "values") else np.asarray(X, dtype=float)
+        labels = self.model.fit_predict(X_arr)
+        self.centers_ = self.model.cluster_centers_
+        d = X_arr.shape[1]
+        self.cov_invs_ = []
+        for k in range(self.n_clusters):
+            X_k = X_arr[labels == k]
+            if len(X_k) > d + 1:
+                cov_k = np.cov(X_k, rowvar=False) + self.reg * np.eye(d)
+            else:
+                # 샘플 부족 시 단위 행렬 (유클리드 거리로 대체)
+                cov_k = np.eye(d)
+            self.cov_invs_.append(np.linalg.pinv(cov_k))
+        return self
+
+    def decision_function(self, X: pd.DataFrame) -> np.ndarray:
+        X_arr = X.values if hasattr(X, "values") else np.asarray(X, dtype=float)
+        all_dists = np.empty((X_arr.shape[0], self.n_clusters))
+        for j, (c, cov_inv) in enumerate(zip(self.centers_, self.cov_invs_)):
+            diff        = X_arr - c
+            mahal_sq    = (diff @ cov_inv * diff).sum(axis=1)
+            all_dists[:, j] = np.sqrt(np.maximum(mahal_sq, 0))
+        return -all_dists.min(axis=1)  # 음수화: 낮을수록 이상
+
+
 class KNNAnomalyDetector:
     """k-NN 거리 기반 이상 탐지.
 
