@@ -62,7 +62,7 @@ def compare_refs(pred_rows, ref_files: dict) -> str:
         agree    = (pred_run == ref_run).sum()
         me_only  = ((pred_run == 1) & (ref_run == 0)).sum()
         ref_only = ((pred_run == 0) & (ref_run == 1)).sum()
-        parts.append(f"{name}: 일치 {agree}/740 | 내only {me_only} | {name}only {ref_only}")
+        parts.append(f"{name}: agree={agree}/740 | mine={me_only} | {name}={ref_only}")
     return "    " + " || ".join(parts)
 
 

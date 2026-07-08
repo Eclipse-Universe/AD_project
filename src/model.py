@@ -177,11 +177,14 @@ def train_autoencoder(
     val_ratio: float = 0.1,
     patience: int = 10,
     random_state: int = 42,
+    weight_decay: float = 0.0,
 ) -> "TEPAutoencoder":
     """StandardScaler 정규화된 X를 받아 AE를 학습한다.
 
     X는 이미 scale_features()를 거친 값이어야 한다 — 스케일이 맞지 않으면
     큰 feature가 MSE를 지배해 재구성 오차가 왜곡된다.
+
+    weight_decay: L2 정규화 계수. 샘플 수 대비 파라미터가 많을 때 과적합 방지용.
     """
     if hidden_dims is None:
         hidden_dims = [32, 16, 8]
@@ -199,7 +202,7 @@ def train_autoencoder(
     )
 
     model = TEPAutoencoder(input_dim=X.shape[1], hidden_dims=hidden_dims)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.MSELoss()
 
     best_val_loss = float("inf")
