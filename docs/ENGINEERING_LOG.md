@@ -1452,8 +1452,31 @@ k=40에서 4-모델 앙상블이 3-모델보다 낮아짐(734→732). LOF와 SPE
 | 상관 행렬 변화 (run) | Corr-Frobenius | sep=3.83, 너무 노이즈 |
 | 윈도우 max (timestep) | W96_max | 회귀 (Exp31) |
 
-미탐색 방향 (동적 피처, 향후 탐색):
-- autocorrelation: run 내 시계열 자기상관 변화 → 정상 운전의 주기성 변화 탐지
-- spectral energy: 주파수 도메인 특성 변화 → 진동 패턴 변화
-- LSTM-AE: 시계열 순서를 학습 → 평균값이 아닌 동적 패턴의 이상 포착
+미탐색 방향 (동적 피처):
+- ~~autocorrelation~~: **Exp33에서 실패 확인** — 500~960 timestep에서 ACF 추정 불안정
+- ~~spectral energy~~: **Wiener-Khinchin 정리에 의해 ACF와 쌍대 → 생략**
+- LSTM-AE: 시계열 순서를 학습 → 구현 복잡도 대비 효과 불확실
+
+### 실질적 천장 선언
+
+**F1=0.9707 (Exp30)이 현재 사용 가능한 방법의 실질적 ceiling.**
+
+탐색 완료된 모든 방향 (성공/실패 포함):
+
+| 신호 유형 | 방법 | 결과 |
+|---|---|---|
+| 밀도 (run 평균) | GMM k=2, tied | 핵심 성분 |
+| 거리 (run 평균) | KMeans-Mahal k=50 | 핵심 성분 |
+| 로컬 밀도 (run 평균) | LOF n=10 | Exp25 성분 |
+| PCA 잔차 (timestep) | SPE k=30 | **Exp30 핵심 (+0.008)** |
+| 분산 변화 | mean+std | 동일 예측 |
+| 시간 추세 | slope, diff_q | 불안정 |
+| 분위수 | p10/p90 | 동일 예측 |
+| 상관 구조 | Corr-Frobenius | sep=3.83 노이즈 |
+| 윈도우 집계 | W96_max | 회귀 (Exp31) |
+| 자기상관 | ACF lag 1~100 | Exp30 대비 악화 |
+| 고차 통계 | 왜도, 첨도 | Exp30 대비 악화 |
+| k 조정 (GMM) | k=2~8 | 동일 예측 |
+| k 조정 (SPE) | k=15~50 | k=30이 최적, k=40 제출 시 F1 -0.012 |
+| 4-모델 앙상블 (+LOF) | GMM+Mahal+SPE+LOF | 3-모델 대비 개선 없음 |
 
